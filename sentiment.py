@@ -9,48 +9,53 @@ from elasticsearch import Elasticsearch
 from config import *
 
 # create instance of elasticsearch
-es = Elasticsearch()
+from config.config import consumer_key, access_token, access_token_secret
+from config.config import consumer_secret
 
+es = Elasticsearch()
 
 class TweetStreamListener(StreamListener):
 
     # on success
     def on_data(self, data):
+        try:
+            # decode json
+            dict_data = json.loads(data)
 
-        # decode json
-        dict_data = json.loads(data)
+            # pass tweet into TextBlob
+            tweet = TextBlob(dict_data["text"])
 
-        # pass tweet into TextBlob
-        tweet = TextBlob(dict_data["text"])
+            # output sentiment polarity
+            print(tweet.sentiment.polarity)
 
-        # output sentiment polarity
-        print tweet.sentiment.polarity
+            # determine if sentiment is positive, negative, or neutral
+            if tweet.sentiment.polarity < 0:
+                sentiment = "negative"
+            elif tweet.sentiment.polarity == 0:
+                sentiment = "neutral"
+            else:
+                sentiment = "positive"
 
-        # determine if sentiment is positive, negative, or neutral
-        if tweet.sentiment.polarity < 0:
-            sentiment = "negative"
-        elif tweet.sentiment.polarity == 0:
-            sentiment = "neutral"
-        else:
-            sentiment = "positive"
+            # output sentiment
+            print(sentiment)
 
-        # output sentiment
-        print sentiment
+            # add text and sentiment info to elasticsearch
+            es.index(index="sentiment",
+                     doc_type="test-type",
+                     body={"author": dict_data["user"]["screen_name"],
+                           "date": dict_data["created_at"],
+                           "message": dict_data["text"],
+                           "polarity": tweet.sentiment.polarity,
+                           "subjectivity": tweet.sentiment.subjectivity,
+                           "sentiment": sentiment})
+        except:
+            pass
 
-        # add text and sentiment info to elasticsearch
-        es.index(index="sentiment",
-                 doc_type="test-type",
-                 body={"author": dict_data["user"]["screen_name"],
-                       "date": dict_data["created_at"],
-                       "message": dict_data["text"],
-                       "polarity": tweet.sentiment.polarity,
-                       "subjectivity": tweet.sentiment.subjectivity,
-                       "sentiment": sentiment})
         return True
 
     # on failure
     def on_error(self, status):
-        print status
+        print(status)
 
 if __name__ == '__main__':
 
@@ -65,4 +70,4 @@ if __name__ == '__main__':
     stream = Stream(auth, listener)
 
     # search twitter for "congress" keyword
-    stream.filter(track=['congress'])
+    stream.filter(track=['trump'])
