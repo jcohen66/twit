@@ -12,9 +12,16 @@ from config import *
 from config.config import consumer_key, access_token, access_token_secret
 from config.config import consumer_secret
 
+import hashlib
+
 es = Elasticsearch()
 
 class TweetStreamListener(StreamListener):
+
+    def __init__(self, message_dict ={}, message_count = 0):
+        self.message_dict = message_dict
+        self.message_count = message_count
+
 
     # on success
     def on_data(self, data):
@@ -39,10 +46,25 @@ class TweetStreamListener(StreamListener):
             # output sentiment
             print(sentiment)
 
+            message_as_bytes = str.encode(dict_data["text"])
+            hash_object = hashlib.md5(message_as_bytes)
+            print(hash_object.hexdigest())
+            if hash_object.hexdigest() in self.message_dict:
+                self.message_dict[hash_object.hexdigest()] += 1
+            else:
+                self.message_dict[hash_object.hexdigest()] = 1
+
+            if self.message_count % 50 == 0:
+                for count in self.message_dict.values():
+                    if count > 1:
+                        print(count, end=" ")
+
+            self.message_count += 1
             # add text and sentiment info to elasticsearch
             es.index(index="sentiment",
                      doc_type="test-type",
                      body={"author": dict_data["user"]["screen_name"],
+                           "hash": hash_object.hexdigest(),
                            "date": dict_data["created_at"],
                            "message": dict_data["text"],
                            "polarity": tweet.sentiment.polarity,
